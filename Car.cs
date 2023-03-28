@@ -11,7 +11,7 @@ namespace csharp_car_race
         public double Speed { get; private set; } // speed in m/s
         public Stopwatch stopwatch { get; private set; }
         private Random random = new Random();
-        private bool finished;
+        public bool finished { get; private set; }
         private bool problemOccured;
         private int problemTime;
         private string problemType;
@@ -63,12 +63,12 @@ namespace csharp_car_race
                 if (stopwatch.ElapsedMilliseconds >= 5000)
                 {
                     double distanceInKm = (double)Distance / 1000;
-                    Console.WriteLine($"{Name} has traveled {distanceInKm:F2} km so far. Its current speed is: {Speed:F2} km/h and it has been driving for {SimulatedSeconds} seconds");
+                    //Console.WriteLine($"{Name} has traveled {distanceInKm:F2} km so far. Its current speed is: {Speed:F2} km/h and it has been driving for {SimulatedSeconds} seconds");
                     stopwatch.Restart();
                 }
             }
             stopwatch.Stop();
-            Console.WriteLine($"{Name} finished the race in {SimulatedSeconds} seconds and {stopwatch.Elapsed.TotalSeconds:F2} real life seconds!");
+            //Console.WriteLine($"{Name} finished the race in {SimulatedSeconds} seconds and {stopwatch.Elapsed.TotalSeconds:F2} real life seconds!");
         }
 
         private async Task MoveAsync(int delayTime)
