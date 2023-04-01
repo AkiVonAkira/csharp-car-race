@@ -1,6 +1,4 @@
-﻿using System.Diagnostics;
-
-namespace csharp_car_race
+﻿namespace csharp_car_race
 {
     class Car
     {
@@ -9,12 +7,12 @@ namespace csharp_car_race
         public int MaxDistance { get; private set; }
         public int SimulatedSeconds { get; private set; }
         public double Speed { get; private set; } // speed in m/s
-        public Stopwatch stopwatch { get; private set; }
+        public double actualRaceTime { get; private set; }
         private Random random = new Random();
         public bool finished { get; private set; }
-        private bool problemOccured;
-        private int problemTime;
-        private string problemType;
+        public bool problemOccured { get; private set; }
+        public int problemTime { get; private set; }
+        public string problemType { get; private set; }
         private int subTicks;
         private int subTickTime;
         public int failures { get; private set; }
@@ -26,21 +24,19 @@ namespace csharp_car_race
             MaxDistance = maxDistance;
             Speed = speed;
             SimulatedSeconds = 0;
+            actualRaceTime = 0;
             random = new Random();
             finished = false;
             problemOccured = false;
             problemTime = 0;
             problemType = "";
             subTicks = 0;
-            subTickTime = 100;
+            subTickTime = 1;
             failures = 0;
         }
 
-        public async Task StartRace()
+        public async Task StartRace(int delayTime)
         {
-            //Console.WriteLine($"{Name} starts the race!");
-            //await Console.Out.WriteLineAsync($"Speed: {Speed}, maxDistance {MaxDistance}, Distance {Distance}, ");
-            stopwatch = Stopwatch.StartNew();
             while (!finished)
             {
                 subTicks++;
@@ -51,24 +47,18 @@ namespace csharp_car_race
                         ResetProblemAsync();
                     }
 
-                    await MoveAsync(10);
+                    await MoveAsync(delayTime);
                 }
                 else
                 {
-                    await MoveAsync(10);
+                    await MoveAsync(delayTime);
                 }
 
-
-                // Print status every 5 seconds
-                if (stopwatch.ElapsedMilliseconds >= 5000)
+                if (finished)
                 {
-                    double distanceInKm = (double)Distance / 1000;
-                    //Console.WriteLine($"{Name} has traveled {distanceInKm:F2} km so far. Its current speed is: {Speed:F2} km/h and it has been driving for {SimulatedSeconds} seconds");
-                    stopwatch.Restart();
+                    actualRaceTime = (double)SimulatedSeconds / 60;
                 }
             }
-            stopwatch.Stop();
-            //Console.WriteLine($"{Name} finished the race in {SimulatedSeconds} seconds and {stopwatch.Elapsed.TotalSeconds:F2} real life seconds!");
         }
 
         private async Task MoveAsync(int delayTime)
@@ -76,6 +66,7 @@ namespace csharp_car_race
             await Task.Delay(delayTime);
 
             SimulatedSeconds++;
+            subTicks++;
 
             Distance += (int)(Speed / 3.6); // convert speed from km/h to m/s
 
@@ -84,67 +75,45 @@ namespace csharp_car_race
                 finished = true;
             }
 
-            subTicks++;
-
             if (subTicks == 30)
             {
                 int eventNumber = random.Next(50);
 
                 if (eventNumber == 0)
                 {
-                    await HandleProblemAsync("ran out of gas", 30);
+                    await HandleProblemAsync("ran out of gas", 30, delayTime);
+                    actualRaceTime += 0.5; // add penalty time for running out of gas
                 }
                 else if (eventNumber <= 2)
                 {
-                    await HandleProblemAsync("got a flat tire", 20);
+                    await HandleProblemAsync("got a flat tire", 20, delayTime);
+                    actualRaceTime += 0.3; // add penalty time for getting a flat tire
                 }
                 else if (eventNumber <= 7)
                 {
-                    await HandleProblemAsync("got a bird on the windshields", 10);
+                    await HandleProblemAsync("got a bird on the windshields", 10, delayTime);
+                    actualRaceTime += 0.1; // add penalty time for getting a bird on the windshield
                 }
                 else if (eventNumber <= 17)
                 {
-                    //await HandleProblemAsync("has a mechanical problem", 0);
-                    //Console.WriteLine($"{Name} has a mechanical problem! It will move 1km/h slower.");
-                    failures++;
+                    await HandleProblemAsync("has a mechanical problem", 0, delayTime);
                     Speed -= 1;
                 }
 
                 subTicks = 0;
             }
-            //else if (subTicks == 15)
-            //{
-            //    int eventNumber = random.Next(50);
-
-            //    if (eventNumber == 0)
-            //    {
-            //        await HandleProblemAsync("ran out of gas", 30);
-            //    }
-            //    else if (eventNumber <= 2)
-            //    {
-            //        await HandleProblemAsync("got a flat tire", 20);
-            //    }
-            //    else if (eventNumber <= 7)
-            //    {
-            //        await HandleProblemAsync("got a bird on the windshields", 10);
-            //    }
-
-            //    subTicks = 0;
-            //}
         }
 
-        private async Task HandleProblemAsync(string type, int time)
+        private async Task HandleProblemAsync(string type, int time, int delayTime)
         {
             failures++;
             problemType = type;
             problemTime = time;
             problemOccured = true;
-            //Console.WriteLine($"{Name} {type}! It will take {time} seconds to fix.");
 
-            await Task.Delay(time * 10);
+            await Task.Delay(time * delayTime);
             SimulatedSeconds += time;
 
-            //Console.WriteLine($"{Name}'s problem has been fixed! It can now resume the race.");
             problemOccured = false;
             problemType = "";
             problemTime = 0;
@@ -152,9 +121,8 @@ namespace csharp_car_race
 
         private void ResetProblemAsync()
         {
-            //Console.WriteLine($"{Name} has fixed the {problemType} and is back on track!");
             problemOccured = false;
-            //problemType = "";
+            problemType = "";
             Speed += problemType switch
             {
                 "ran out of gas" => 20,
@@ -165,5 +133,4 @@ namespace csharp_car_race
             };
         }
     }
-
 }

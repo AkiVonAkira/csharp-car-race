@@ -4,41 +4,57 @@ namespace csharp_car_race
 {
     class Program
     {
-
+        public static List<Car> cars { get; set; }
         public static Stopwatch Stopwatch = new Stopwatch();
+        public static int _mode;
 
         static async Task Main(string[] args)
         {
-            Console.Clear();
-            Console.WriteLine("Welcome to the car race simulation!");
+            int _mode = SelectMode();
+
             Console.WriteLine("Enter the number of cars participating in the race:");
             int numOfCars = int.Parse(Console.ReadLine());
 
-            List<Car> cars = new List<Car>();
+            cars = new List<Car>();
 
-            Console.WriteLine("Do you want to use the standard race conditions? (y/n)");
+            Console.WriteLine("Do you want to use the standard race conditions? (y/n) [10km Race, 120km/h]");
             string standardRace = Console.ReadLine();
 
-            int maxDistance = 0;
+            int maxDistance = 10000;
+            int carSpeed = 120;
             List<string> carNames = new List<string>();
 
             if (standardRace.ToLower() == "y")
             {
-                maxDistance = numOfCars * 100;
                 carNames = new List<string>();
                 for (int i = 1; i <= numOfCars; i++)
                 {
                     carNames.Add($"Car {i}");
                 }
             }
-            else
+            else if (standardRace.ToLower() == "n" && _mode == 1)
             {
                 Console.WriteLine("Enter the maximum distance (in km):");
-                maxDistance = int.Parse(Console.ReadLine());
+                maxDistance = int.Parse(Console.ReadLine()) * 1000;
+                Console.WriteLine("Enter the car speed (in km/h):");
+                carSpeed = int.Parse(Console.ReadLine());
+                carNames = new List<string>();
+                for (int i = 1; i <= numOfCars; i++)
+                {
+                    carNames.Add($"Car {i}");
+                }
+            }
+            else if (standardRace.ToLower() == "n" && _mode == 2)
+            {
+                Console.WriteLine("Enter the maximum distance (in km):");
+                maxDistance = int.Parse(Console.ReadLine()) * 1000;
+                Console.WriteLine("Enter the car speed (in km/h):");
+                carSpeed = int.Parse(Console.ReadLine());
 
                 Console.WriteLine($"Enter the {numOfCars} car names:");
                 for (int i = 0; i < numOfCars; i++)
                 {
+                    Console.WriteLine($"Enter car name for Car nr. {i + 1}");
                     carNames.Add(Console.ReadLine());
                 }
             }
@@ -49,137 +65,225 @@ namespace csharp_car_race
                 if (standardRace.ToLower() == "y")
                 {
                     // Car name, speed in km/h, distance in meters
-                    cars.Add(new Car(carNames[i], 120, 10000));
+                    cars.Add(new Car(carNames[i], carSpeed, maxDistance));
                 }
                 else
                 {
-                    Console.WriteLine($"Enter the speed of {carNames[i]} (in km/h):");
-                    double speed = double.Parse(Console.ReadLine());
-                    cars.Add(new Car(carNames[i], (int)speed, maxDistance));
+                    cars.Add(new Car(carNames[i], carSpeed, maxDistance));
                 }
             }
 
             // Create and start the progress menu task
-            UpdateProgressMenu(cars);
-
-            Console.WriteLine("The race is starting!\n");
+            var cancellationTokenSource = new CancellationTokenSource();
+            var progressMenuTask = UpdateProgressMenu(cancellationTokenSource.Token);
 
             Stopwatch.Start();
-            // Start the race and wait for all cars to finish
-            List<Task> tasks = new List<Task>();
-            foreach (Car car in cars)
+            if (_mode == 1)
             {
-                tasks.Add(car.StartRace());
+                await RunSimulation();
             }
-            await Task.WhenAll(tasks);
-            Stopwatch.Stop();
-            Console.ReadLine();
+            else if (_mode == 2)
+            {
+                await RunRealTime();
+            }
 
+            Stopwatch.Stop();
+            Task.Delay(2000).Wait();
+            cancellationTokenSource.Cancel();
+            await progressMenuTask;
+
+            Console.ReadLine();
         }
 
-        private static async void UpdateProgressMenu(List<Car> cars)
+        private static int SelectMode()
         {
-            while (true)
+            Console.Clear();
+            Console.WriteLine("Welcome to the Car Race Simulation!\n");
+            Console.WriteLine("Choose a Mode: \n(1) Simulation \n(2) Real Time");
+            int mode = int.Parse(Console.ReadLine());
+            if (mode != 1 && mode != 2)
+            {
+                Console.WriteLine("Invalid mode selection. Try again in 1 second.");
+                Thread.Sleep(1000);
+                SelectMode();
+            }
+            return mode;
+        }
+
+        static async Task RunSimulation()
+        {
+            List<Task> tasks = new List<Task>();
+
+            foreach (var car in cars)
+            {
+                tasks.Add(car.StartRace(10));
+            }
+
+            await Task.WhenAll(tasks.ToArray());
+        }
+
+        static async Task RunRealTime()
+        {
+            List<Task> tasks = new List<Task>();
+
+            foreach (var car in cars)
+            {
+                tasks.Add(car.StartRace(1000));
+            }
+            await Task.WhenAll(tasks.ToArray());
+        }
+
+        private static async Task UpdateProgressMenu(CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
             {
                 Console.Clear();
-                Console.WriteLine("Simulation Progress");
-                Console.WriteLine("-------------------");
 
-                // Calculate the progress percentage
-                int completedCars = 0;
-                foreach (Car car in cars)
-                {
-                    if (car.finished)
-                    {
-                        completedCars++;
-                    }
-                }
-                int progressPercentage = (int)Math.Round((double)completedCars / cars.Count * 100);
-
-                Console.WriteLine($"Completed: {completedCars}/{cars.Count} ({progressPercentage}%)");
-
-                // Print the progress bar
-                int progressBarWidth = 30;
-                int completedWidth = (int)Math.Round((double)progressBarWidth / 100 * progressPercentage);
-                int remainingWidth = progressBarWidth - completedWidth;
-
-                Console.Write("[");
-                Console.Write(new string('#', completedWidth));
-                Console.Write(new string(' ', remainingWidth));
-                Console.Write("]\n");
-
-                // Determine the winner(s)
-                double minTime = double.MaxValue;
-                List<int> winners = new List<int>();
-                foreach (Car car in cars)
-                {
-                    double timeTaken = car.SimulatedSeconds;
-                    if (timeTaken < minTime)
-                    {
-                        minTime = timeTaken;
-                        winners = new List<int> { cars.IndexOf(car) };
-                    }
-                    else if (timeTaken == minTime)
-                    {
-                        winners.Add(cars.IndexOf(car));
-                    }
-                }
-
-                // Determine the car(s) with the least failures
-                int minFailures = int.MaxValue;
-                List<string> leastFailuresCars = new List<string>();
-                foreach (Car car in cars)
-                {
-                    int failures = car.failures;
-                    if (failures < minFailures)
-                    {
-                        minFailures = failures;
-                        leastFailuresCars = new List<string> { car.Name };
-                    }
-                    else if (failures == minFailures)
-                    {
-                        leastFailuresCars.Add(car.Name);
-                    }
-                }
-
+                await PrintProgressBar();
 
                 // Print the race results
                 Console.WriteLine($"Elapsed Time: {Program.Stopwatch.Elapsed.TotalSeconds:F2} seconds\n");
-                Console.WriteLine("Simulation Results:\n");
 
-                //foreach (Car car in cars)
-                //{
-                //    Console.WriteLine($"{car.Name} - {car.Distance / 1000:F2} km, {car.Speed:F2} km/h, Simulated Seconds: {car.SimulatedSeconds:F2} seconds, Real Time: {car.stopwatch.Elapsed.TotalSeconds:F2} seconds, Failures: {car.failures}");
-                //}
+                //var sortedCars = await GetRaceWinners(); 
+                var sortedCars = cars.OrderBy(car => car.actualRaceTime).ThenByDescending(car => car.Distance);
 
-                if (winners.Count == 1)
-                {
-                    Console.WriteLine($"The fastest car is {winners[0]}! With a completion time of {cars[winners[0]].SimulatedSeconds:F0} seconds.");
-                }
-                else if (winners.Count <= 20)
-                {
-                    Console.WriteLine($"Fastest Car(s) {string.Join(", ", winners)}! With a completion time of {cars[winners[0]].SimulatedSeconds:F0} seconds.");
-                }
-                else
-                {
-                    Console.WriteLine($"{winners.Count} Winners right now");
-                }
 
-                if (leastFailuresCars.Count == 1)
-                {
-                    Console.WriteLine($"The car with the least failures is {leastFailuresCars[0]}!");
-                }
-                else if (leastFailuresCars.Count <= 20)
-                {
-                    Console.WriteLine($"Car(s) with the least failures {string.Join(", ", leastFailuresCars)}!");
-                }
-                else
-                {
-                    Console.WriteLine($"{winners.Count} Cars with failures right now");
-                }
+                string winners = await GetRaceWinners();
+                Console.WriteLine(winners);
+                string leastFailures = await DetermineLeastFailures();
+                Console.WriteLine(leastFailures);
 
+                Console.WriteLine();
+
+                // Display information for the top cars based on lowest time
+                int consoleHeight = Console.WindowHeight;
+                int rowsPerCar = 4; // Each car takes 5 rows (name, distance, speed/time)
+
+                int maxCarsToShow = consoleHeight / rowsPerCar - 3; // Leave room for other output
+
+                Console.WriteLine($"{"Car Name",-20} {"Distance (km)",-20} {"Speed (km/h)",-20} {"Time (s)",-20}");
+                Console.WriteLine(new string('-', Console.WindowWidth));
+
+                foreach (var car in sortedCars.Take(maxCarsToShow))
+                {
+                    double distanceInKm = (double)car.Distance / 1000;
+                    Console.WriteLine($"{car.Name,-20} {distanceInKm,-20:F2} {car.Speed,-20:F2} {car.SimulatedSeconds,-20}");
+
+                    if (car.problemOccured)
+                    {
+                        Console.WriteLine($"{car.Name} has a {car.problemType}! It will take {car.problemTime} seconds to fix.");
+                    }
+
+                    if (car.failures > 0)
+                    {
+                        Console.WriteLine($"{car.Name} has experienced {car.failures} failures so far.");
+                    }
+
+                    Console.WriteLine(new string('-', Console.WindowWidth));
+                }
 
                 await Task.Delay(1000); // Wait for 1000 milisecond before updating the progress menu again
+            }
+        }
+
+        private static async Task PrintProgressBar()
+        {
+            // Calculate the progress percentage
+            int completedCars = 0;
+            foreach (Car car in cars)
+            {
+                if (car.finished)
+                {
+                    completedCars++;
+                }
+            }
+            int progressPercentage = (int)Math.Round((double)completedCars / cars.Count * 100);
+
+            Console.WriteLine($"Completed: {completedCars}/{cars.Count} ({progressPercentage}%)");
+
+            // Print the progress bar
+            int progressBarWidth = 50;
+            int completedWidth = (int)Math.Round((double)progressBarWidth / 100 * progressPercentage);
+            int remainingWidth = progressBarWidth - completedWidth;
+
+            Console.Write("[");
+            Console.Write(new string('#', completedWidth));
+            Console.Write(new string(' ', remainingWidth));
+            Console.Write("]\n");
+            await Task.Delay(10);
+        }
+
+        static async Task<string> GetRaceWinners()
+        {
+            var winners = cars.Where(c => c.finished)
+                              .OrderBy(c => c.actualRaceTime)
+                              .ThenByDescending(c => c.Distance)
+                              .Take(10)
+                              .ToList();
+
+            if (winners.Count == 1)
+            {
+                return $"{winners[0].Name} won the race with a time of {winners[0].actualRaceTime:F2}s and a distance of {winners[0].Distance:F2}m.";
+            }
+            else if (winners.Count > 1 && winners.Count <= 10)
+            {
+                var winnerNames = string.Join(", ", winners.Select(w => w.Name));
+                return $"The winners are {winnerNames}.";
+            }
+            else if (winners.Count > 10)
+            {
+                return $"There are too many winners right now.";
+            }
+            else
+            {
+                return $"There are no winners yet.";
+            }
+        }
+
+        static async Task<string> DetermineLeastFailures()
+        {
+            int minFailures = int.MaxValue;
+            List<Car> leastFailuresCars = new List<Car>();
+            List<Car> carsWithFailures = new List<Car>();
+
+            foreach (Car car in cars)
+            {
+                int failures = car.failures;
+                if (failures < minFailures)
+                {
+                    minFailures = failures;
+                    leastFailuresCars = new List<Car> { car };
+                }
+                else if (failures == minFailures)
+                {
+                    leastFailuresCars.Add(car);
+                }
+
+                if (failures > 0)
+                {
+                    carsWithFailures.Add(car);
+                }
+            }
+
+
+            if (carsWithFailures.Count == 0)
+            {
+                return "No cars have failures.";
+            }
+            else if (carsWithFailures.Count == 1)
+            {
+                Car car = carsWithFailures[0];
+                return $"{car.Name} has the least failures with {car.failures} failure(s).";
+            }
+            else if (carsWithFailures.Count <= 10)
+            {
+                string carNames = string.Join(", ", carsWithFailures.Select(c => c.Name));
+                return $"Cars with failures: {carNames}.";
+            }
+            else
+            {
+                int maxFailures = carsWithFailures.Max(car => car.failures);
+                return $"{carsWithFailures.Count} Cars with failures. Lowest count is {minFailures}. Highest count is {maxFailures}.";
             }
         }
     }
